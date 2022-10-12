@@ -1,0 +1,60 @@
+csh install.scr
+alias naccess='/home/zjl/Naccess/naccess'
+
+pdb文件中提取氨基酸序列
+pymol receptor.pdb -c -d "save receptor.fasta"
+select binding, byres all within 5 of sele
+
+组会
+Meeting ID: 953 5108 4291
+Passcode: 651193
+
+colabfold (第一个有可能出错）多试几次
+pip install "colabfold[alphafold] @ git+https://github.com/sokrypton/ColabFold"    
+pip install --upgrade "jax[cuda]<0.3.0" -f https://storage.googleapis.com/jax-releases/jax_releases.html  # Note: wheels only available on linux.
+# For template-based predictions also install kalign and hhsuite
+conda install -c conda-forge -c bioconda kalign2=2.04 hhsuite=3.3.0
+# For amber also install openmm and pdbfixer
+conda install -c conda-forge openmm=7.5.1 pdbfixer
+
+tar -zxvf tar.gz
+
+blast
+
+psiblast -query E:\ncbi\blast-BLAST_VERSION+\db\6c9u-A.fasta -db E:\ncbi\blast-BLAST_VERSION+\db\sp -evalue 0.001 -num_iterations 3 -out_ascii_pssm E:\ncbi\blast-BLAST_VERSION+\db\output\6c9u-A.pssm 
+
+
+任务：
+在OSC服务器上创建运行geometric的虚拟环境
+使用软件：
+Xshell
+连接OSC服务器，创建环境，运行代码
+Xftp
+数据和代码存储
+OSC服务器：
+IP:pitzer.osc.edu
+端口:22
+用户名：yuy702
+密码：Yy19970825
+
+
+OSC文档：
+https://my.osc.edu/apexprod/rws_osc/r/1005/login_desktop?clear=RP,LOGIN_DESKTOP
+需要登录账号：
+用户名：yuy702
+密码：Yy19970825
+
+pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.12.0+cu113.html
+pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.12.0+cu113.html
+pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.12.0+cu113.html
+pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.12.0+cu113.html
+pip install torch-geometric
+
+linux	cuda
+https://blog.csdn.net/qq_41185868/article/details/97521492
+
+
+lambo 
+pip install git+ 无法访问问题 中间加 gitclone.com/   多试几次
+eg. pip install git+https://gitclone.com/github.com/
+python scripts/black_box_opt.py optimizer=lambo optimizer.encoder_obj=mlm task=proxy_rfp tokenizer=protein surrogate=multi_task_exact_gp acquisition=nehvi

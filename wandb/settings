@@ -1,0 +1,5 @@
+[default]
+entity = zjl666
+project = lambo
+base_url = https://api.wandb.ai
+

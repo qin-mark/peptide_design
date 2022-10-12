@@ -1,0 +1,6 @@
+2022-08-31 12:26:30,535 INFO    MainThread:16140 [internal.py:wandb_internal():88] W&B internal server running at pid: 16140, started at: 2022-08-31 12:26:30.535323
+2022-08-31 12:26:30,537 INFO    WriterThread:16140 [datastore.py:open_for_write():77] open: /home/qin/source_code/lambo-source/lambo-main/scripts/data/experiments/test/wandb/run-20220831_122630-x53su5sv/run-x53su5sv.wandb
+2022-08-31 12:26:30,537 DEBUG   HandlerThread:16140 [handler.py:handle_request():121] handle_request: check_version
+2022-08-31 12:26:30,539 DEBUG   SenderThread:16140 [sender.py:send():173] send: header
+2022-08-31 12:26:30,539 DEBUG   SenderThread:16140 [sender.py:send_request():183] send_request: check_version
+2022-08-31 12:26:31,177 WARNING MainThread:16140 [internal.py:wandb_internal():146] Internal process interrupt: 1
