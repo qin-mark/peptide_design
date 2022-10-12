@@ -4,8 +4,11 @@ To install the lambo environment, please refer to the environment building secti
 [https://github.com/samuelstanton/lambo]
 ## 1.2 Colabfold environment
 Please refer to the colabfold installation tutorial.\
-[https://github.com/sokrypton/ColabFold]
-And then, Set the colabfold_batch command as a system environment variable
+[https://github.com/sokrypton/ColabFold]\
+And then, Set the colabfold_batch command as a system environment variable:\
+```
+export PATH=“/home/XXX/colabfold_batch/bin:”$PATH
+```
 # 1.3 Running settings 
 Before running, Please go to our_settings.py file under the project to set the running parameters.
 # 2. Running command
