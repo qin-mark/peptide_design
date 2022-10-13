@@ -21,6 +21,10 @@ python scripts/black_box_opt.py optimizer=lambo optimizer.encoder_obj=mlm task=p
 For input, please refer to the lambo_document.docx document in the project path
 ## 3.2 Output
 The project will output a 'log.csv' file, located under 'data/experiment/test'
-
+# 4. Note
+If you have changed the location of the project code, or are using the project code for the first time, please reinstall lambo using the following command:\
+```
+pip install -e .
+```
 
 
