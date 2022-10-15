@@ -8,7 +8,7 @@ import random
 import os
 from torch.nn import functional as F
 import csv
-
+import hydra
 from pymoo.factory import get_performance_indicator
 
 from botorch.utils.multi_objective import infer_reference_point
@@ -22,7 +22,7 @@ from colabfold_SASA.Colabfold_SASA import  Colabfold_SASA
 import our_settings
 
 
-def save(round, seq, value):
+def save_result(round, seq, value):
     fdata = []
     for i in range(len(seq)):
         data = [round, seq[i]]
@@ -83,7 +83,9 @@ class LaMBO(object):
         self.get_metrics=Colabfold_SASA()
 
     def optimize(self, candidate_pool, pool_targets, all_seqs, all_targets, log_prefix=''):
-        strr_log=''
+        base_candidate_save=candidate_pool
+        base_target_save=pool_targets
+        project_path = hydra.utils.get_original_cwd()
         batch_size = self.bb_task.batch_size
         target_min = all_targets.min(axis=0).copy()
         target_range = all_targets.max(axis=0).copy() - target_min
@@ -198,6 +200,7 @@ class LaMBO(object):
             X_val, Y_val = self.val_split.inputs, tgt_transform(self.val_split.targets)
             X_test, Y_test = self.test_split.inputs, tgt_transform(self.test_split.targets)
 
+            #TODO: save checkpoint for surrogate parameters
             records = self.surrogate_model.fit(
                 X_train, Y_train, X_val, Y_val, X_test, Y_test,
                 encoder_obj=self.encoder_obj, resampling_temp=None
@@ -299,8 +302,16 @@ class LaMBO(object):
                     opt_params.copy_(opt_features)
 
                 # optimize decision variables
+                # TODO: load RESUME checkpoint
                 optimizer = torch.optim.Adam(params=[opt_params], lr=self.lr, betas=(0., 1e-2))
                 lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=self.patience)
+                if our_settings.RESUME==True:                    # encoder
+                    path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt')
+                    checkpoint_ec = torch.load(path_checkpoint_ec)
+                    optimizer.load_state_dict(checkpoint_ec['optimizer'])
+                    lr_sched.load_state_dict(checkpoint_ec['lr_sched'])
+                    self.encoder.load_state_dict(checkpoint_ec['encoder'])
+
                 best_score, best_step = None, 0
                 for step_idx in range(self.num_opt_steps):
                     if self.encoder_obj == 'lanmt':
@@ -331,6 +342,7 @@ class LaMBO(object):
                     else:
                         raise ValueError
 
+
                     lat_acq_vals = acq_fn(pooled_features.unsqueeze(0))
                     loss = -lat_acq_vals.mean() + self.entropy_penalty * logit_entropy.mean()
 
@@ -338,6 +350,14 @@ class LaMBO(object):
                         loss.backward()
                         optimizer.step()
                         lr_sched.step(loss)
+
+                    #TODO: save encoder model parameters
+                    checkpoint_encoder = {
+                        "optimizer": optimizer.state_dict(),
+                        "lr_sched": lr_sched.state_dict(),
+                        'encoder':self.encoder.state_dict()
+                    }
+                    torch.save(checkpoint_encoder,os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt'))
 
                     tgt_seqs = tokens_to_str(tgt_tok_idxs, self.encoder.tokenizer)
                     act_acq_vals = acq_fn(tgt_seqs[None, :]).mean().item()
@@ -504,7 +524,15 @@ class LaMBO(object):
             #     f.write('\n'.join(new_seqs) + '\n' + str(new_targets) + '\n')
 
             #save log file
-            save(round_idx, new_seqs, all_metrics_candidate)
+            save_result(round_idx, new_seqs, all_metrics_candidate)
+            #TODO: save pool candidate and base candidate
+            checkpoint = {
+                "all_seqs": pool_seqs,
+                "all_targets": pool_targets,
+                "base_candidate": base_candidate_save,
+                "base_target":base_target_save
+            }
+            torch.save(checkpoint,os.path.join(project_path, 'data', 'experiments', 'test','temp_data.pt'))
 
         return metrics
 
@@ -545,3 +573,5 @@ class LaMBO(object):
         metrics = {'/'.join((log_prefix, 'opt_metrics', key)): val for key, val in metrics.items()}
         wandb.log(metrics)
         return metrics
+
+
