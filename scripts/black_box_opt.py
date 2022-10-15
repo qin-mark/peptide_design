@@ -15,6 +15,8 @@ from upcycle.logging.analysis import flatten_config
 
 from gpytorch.settings import max_cholesky_size
 # os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+import our_settings
+
 
 @hydra.main(config_path='../hydra_config', config_name='black_box_opt')
 def main(config):
@@ -40,22 +42,49 @@ def main(config):
 
             project_root = Path(os.getcwd()).parents[2]  # changing the Hydra run dir will break this.
             # base_candidates, base_targets, all_seqs, all_targets = bb_task.task_setup(config, project_root=project_root)
-            base_candidates, base_targets, all_seqs, all_targets = bb_task.task_setup_SASA_energy(config,project_root=project_root)
 
-            # optimizer
-            max_chol_sz = config.surrogate.get('max_cholesky_size', int(1e5))
-            with max_cholesky_size(max_chol_sz):
-                optimizer = hydra.utils.instantiate(
-                    config.optimizer,
-                    bb_task=config.task,
-                    surrogate=config.surrogate,
-                    acquisition=config.acquisition,
-                    encoder=config.encoder,
-                    tokenizer=tokenizer
-                )
-                metrics = optimizer.optimize(
-                    base_candidates, base_targets, all_seqs, all_targets, log_prefix=config.task.log_prefix
-                )
+            if our_settings.RESUME==True:                 # pool
+                #TODO:hold on training
+                #load base_candidates, base_targets, all_seqs, all_targets
+
+                path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test','temp_data.pt'))
+                assert os.path.exists(path_checkpoint),'you have not run once, please set RESUME=False in oursettings.py'
+                checkpoint = torch.load(path_checkpoint)
+                base_candidates=checkpoint['base_candidate']
+                base_targets=checkpoint['base_target']
+                all_seqs=checkpoint['all_seqs']  #pool
+                all_targets=checkpoint['all_targets']
+
+                max_chol_sz = config.surrogate.get('max_cholesky_size', int(1e5))
+                with max_cholesky_size(max_chol_sz):
+                    optimizer = hydra.utils.instantiate(
+                        config.optimizer,
+                        bb_task=config.task,
+                        surrogate=config.surrogate,
+                        acquisition=config.acquisition,
+                        encoder=config.encoder,
+                        tokenizer=tokenizer
+                    )
+                    metrics = optimizer.optimize(
+                        base_candidates, base_targets, all_seqs, all_targets, log_prefix=config.task.log_prefix
+                    )
+            else:
+                base_candidates, base_targets, all_seqs, all_targets = bb_task.task_setup_SASA_energy(config,project_root=project_root)
+                # optimizer
+                max_chol_sz = config.surrogate.get('max_cholesky_size', int(1e5))
+                with max_cholesky_size(max_chol_sz):
+                    optimizer = hydra.utils.instantiate(
+                        config.optimizer,
+                        bb_task=config.task,
+                        surrogate=config.surrogate,
+                        acquisition=config.acquisition,
+                        encoder=config.encoder,
+                        tokenizer=tokenizer
+                    )
+                    metrics = optimizer.optimize(
+                        base_candidates, base_targets, all_seqs, all_targets, log_prefix=config.task.log_prefix
+                    )
+
             metrics = {key.split('/')[-1]: val for key, val in metrics.items()}  # strip prefix
             ret_val = metrics['hypervol_rel']
 
