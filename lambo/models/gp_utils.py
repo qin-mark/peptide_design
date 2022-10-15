@@ -1,3 +1,5 @@
+import os
+
 import torch
 import wandb
 import math
@@ -14,13 +16,14 @@ from torch.nn.modules.batchnorm import _BatchNorm
 
 from botorch.models import SingleTaskGP, KroneckerMultiTaskGP
 
+import our_settings
 from lambo.utils import draw_bootstrap, to_tensor, weighted_resampling, batched_call
 from lambo import transforms as gfp_transforms
 from lambo.models.shared_elements import check_early_stopping
 from lambo.models.mlm import mlm_train_step, mlm_eval_epoch
 from lambo.models.lanmt import lanmt_eval_epoch, lanmt_train_step
 from lambo.models.lm_elements import LanguageModel
-
+import hydra
 
 def compute_mll_terms(mvn_dist, targets):
     mean, covar = mvn_dist.loc, mvn_dist.lazy_covariance_matrix
@@ -194,6 +197,15 @@ def fit_gp_surrogate(
     gp_lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         gp_optimizer, patience=math.ceil(surrogate.patience / 2.), threshold=1e-3
     )
+    #TODO: load surrogate function
+    project_path=hydra.utils.get_original_cwd()
+    if our_settings.RESUME==True:
+        path_checkpoint_gp = os.path.join(project_path, 'data', 'experiments', 'test','surrogate.pt')
+        assert os.path.exists(path_checkpoint_gp),'do not have checkpoint, maybe you have not train at once least'
+        checkpoint_gp = torch.load(path_checkpoint_gp)
+        gp_optimizer.load_state_dict(checkpoint_gp['gp_optimizer'])
+        gp_lr_sched.load_state_dict(checkpoint_gp['gp_lr_sched'])
+        surrogate.load_state_dict(checkpoint_gp['surrogate'])
 
     records = [start_metrics]
     print('\n---- fitting all params ----')
@@ -233,6 +245,13 @@ def fit_gp_surrogate(
             avg_train_loss += (mlm_loss.detach() + gp_loss.detach()) / len(train_loader)
 
         gp_lr_sched.step(avg_train_loss)
+
+        checkpoint_gp = {
+            "gp_optimizer": gp_optimizer.state_dict(),
+            "gp_lr_sched": gp_lr_sched.state_dict(),
+            "surrogate":surrogate.state_dict()                  # model
+        }
+        torch.save(checkpoint_gp,os.path.join(project_path, 'data', 'experiments', 'test','surrogate.pt'))
 
         metrics.update({
             "epoch": epoch_idx + 1,
