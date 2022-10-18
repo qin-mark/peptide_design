@@ -116,6 +116,9 @@ class ProxyRFPTask(BaseTask):
                 if math.isnan(datum[metric]):
                     metric=self.get_metrics.run_colab_sasa(datum.fpbase_seq,metric)
                     metrics.update(metric)
+                else:
+                    metric={metric:datum[metric]}
+                    metrics.update(metric)
 
             peptide_path = os.path.join(f'{project_root}',
                                         f'colabfold_SASA/result/' + datum.fpbase_seq + '/peptide.pdb')
@@ -143,6 +146,9 @@ class ProxyRFPTask(BaseTask):
             for metric in our_settings.scoring_metrics:
                 if math.isnan(datum[metric]):
                     metric = self.get_metrics.run_colab_sasa(datum.foldx_seq, metric)
+                    metrics.update(metric)
+                else:
+                    metric={metric:datum[metric]}
                     metrics.update(metric)
 
             assert len(metrics)==len(our_settings.scoring_metrics),'scoring funtion have some problem, please contact qwy'
