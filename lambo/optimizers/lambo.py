@@ -25,19 +25,36 @@ import our_settings
 def save_result(round, seq, value):
     fdata = []
     for i in range(len(seq)):
-        data = [round, seq[i]]
-        for j in range(2):
-            data.append(value[i][j])
+        data = [str(round), seq[i]]
+        for j in range(len(our_settings.scoring_metrics)):
+            data.append(str(value[i][j]))
         fdata.append(data)
-    if not os.path.exists('log.csv'):
-        with open('log.csv', 'a', newline='') as log:
-            fnames = [name for name in our_settings.scoring_metrics]
-            # fnames = ['round_index', 'seq', 'sasa', 'energy', 'ratio_akt', 'ratio_akt_domain']
-            writer = csv.DictWriter(log, fieldnames=fnames)
-            writer.writeheader()
-    with open('log.csv', 'a', newline='') as log:
-        writer = csv.writer(log)
-        writer.writerows(fdata)
+    strr = ''
+    for data_temp in fdata:
+        strr = strr + ','.join(data_temp) + '\n'
+    csvFile2 = open('log.csv', 'a', newline='')  # 设置newline，否则两行之间会空一行
+    writer = csv.writer(csvFile2)
+    m = len(fdata)
+    if os.path.getsize('log.csv') == 0:
+        writer.writerow(['roundidx', 'sequence'] + our_settings.scoring_metrics)
+    for i in range(m):
+        writer.writerow(fdata[i])
+    csvFile2.close()
+    # fdata = []
+    # for i in range(len(seq)):
+    #     data = [round, seq[i]]
+    #     for j in range(2):
+    #         data.append(value[i][j])
+    #     fdata.append(data)
+    # if not os.path.exists('log.csv'):
+    #     with open('log.csv', 'a', newline='') as log:
+    #         fnames = [name for name in our_settings.scoring_metrics]
+    #         # fnames = ['round_index', 'seq', 'sasa', 'energy', 'ratio_akt', 'ratio_akt_domain']
+    #         writer = csv.DictWriter(log, fieldnames=fnames)
+    #         writer.writeheader()
+    # with open('log.csv', 'a', newline='') as log:
+    #     writer = csv.writer(log)
+    #     writer.writerows(fdata)
 
 class LaMBO(object):
     def __init__(self, bb_task, tokenizer, encoder, surrogate, acquisition, num_rounds, num_gens,
@@ -82,53 +99,106 @@ class LaMBO(object):
         self.test_split = DataSplit()
         self.get_metrics=Colabfold_SASA()
 
-    def optimize(self, candidate_pool, pool_targets, all_seqs, all_targets, log_prefix=''):
-        base_candidate_save=candidate_pool
-        base_target_save=pool_targets
+    def optimize(self, candidate_pool, pool_targets, all_seqs, all_targets,active_candidates,round_start, log_prefix=''):
         project_path = hydra.utils.get_original_cwd()
         batch_size = self.bb_task.batch_size
-        target_min = all_targets.min(axis=0).copy()
-        target_range = all_targets.max(axis=0).copy() - target_min
-        hypercube_transform = Normalizer(
-            loc=target_min + 0.5 * target_range,
-            scale=target_range / 2.,
-        )
-        new_seqs = all_seqs.copy()
-        new_targets = all_targets.copy()
+        if round_start==1:
+            base_candidate_save = candidate_pool
+            base_target_save = pool_targets
+            target_min = all_targets.min(axis=0).copy()
+            target_range = all_targets.max(axis=0).copy() - target_min
+            hypercube_transform = Normalizer(
+                loc=target_min + 0.5 * target_range,
+                scale=target_range / 2.,
+            )
+            new_seqs = all_seqs.copy()
+            new_targets = all_targets.copy()
 
-        is_feasible = self.bb_task.is_feasible(candidate_pool)
-        pool_candidates = candidate_pool[is_feasible]
-        pool_targets = pool_targets[is_feasible]
-        pool_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pool_candidates])
+            is_feasible = self.bb_task.is_feasible(candidate_pool)
+            pool_candidates = candidate_pool[is_feasible]
+            pool_targets = pool_targets[is_feasible]
+            pool_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pool_candidates])
 
-        self.active_candidates, self.active_targets = pool_candidates, pool_targets
-        self.active_seqs = pool_seqs
+            #check round index
+            self.active_candidates, self.active_targets = pool_candidates, pool_targets
+            self.active_seqs = pool_seqs
+            # elif round_start>=1 and our_settings.RESUME==True:
+            #     self.active_candidates, self.active_targets=active_candidates,all_targets,
+            #     self.active_seqs=all_seqs
+            # else:
+            #     raise NameError('maybe RESUME have some error,please check your round_idx')
 
-        pareto_candidates, pareto_targets = pareto_frontier(self.active_candidates, self.active_targets)
-        pareto_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pareto_candidates])
-        pareto_cand_history = pareto_candidates.copy()
-        pareto_seq_history = pareto_seqs.copy()
-        pareto_target_history = pareto_targets.copy()
-        norm_pareto_targets = hypercube_transform(pareto_targets)
-        self._ref_point = -infer_reference_point(-torch.tensor(norm_pareto_targets)).numpy()
-        print(self._ref_point)
-        rescaled_ref_point = hypercube_transform.inv_transform(self._ref_point.copy())
+            pareto_candidates, pareto_targets = pareto_frontier(self.active_candidates, self.active_targets)
+            pareto_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pareto_candidates])
+            pareto_cand_history = pareto_candidates.copy()
+            pareto_seq_history = pareto_seqs.copy()
+            pareto_target_history = pareto_targets.copy()
+            norm_pareto_targets = hypercube_transform(pareto_targets)
+            self._ref_point = -infer_reference_point(-torch.tensor(norm_pareto_targets)).numpy()
+            print(self._ref_point)
+            rescaled_ref_point = hypercube_transform.inv_transform(self._ref_point.copy())
 
-        # logging setup
-        total_bb_evals = 0
-        start_time = time.time()
-        round_idx = 0
-        self._log_candidates(pareto_candidates, pareto_targets, round_idx, log_prefix)
-        metrics = self._log_optimizer_metrics(norm_pareto_targets, round_idx, total_bb_evals, start_time, log_prefix)
+            # logging setup
+            total_bb_evals = 0
+            start_time = time.time()
+            round_idx = 0
+            self._log_candidates(pareto_candidates, pareto_targets, round_idx, log_prefix)
+            metrics = self._log_optimizer_metrics(norm_pareto_targets, round_idx, total_bb_evals, start_time, log_prefix)
 
-        print('\n best candidates')
-        obj_vals = {f'obj_val_{i}': pareto_targets[:, i].min() for i in range(self.bb_task.obj_dim)}
-        print(pd.DataFrame([obj_vals]).to_markdown(floatfmt='.4f'))
+            print('\n best candidates')
+            obj_vals = {f'obj_val_{i}': pareto_targets[:, i].min() for i in range(self.bb_task.obj_dim)}
+            print(pd.DataFrame([obj_vals]).to_markdown(floatfmt='.4f'))
+        else:
+            base_candidate_save = candidate_pool
+            base_target_save = pool_targets
+            pareto_target_history=None
+            pareto_seq_history=None
+            pareto_cand_history=None
+            rescaled_ref_point=None
+            pareto_candidates = None
+            pareto_targets = None
+            hypercube_transform=None
+            obj_vals=None
+            path_checkpoint = os.path.join(os.path.join(project_path, 'data', 'experiments', 'test', 'temp_data.pt'))
+            checkpoint_data = torch.load(path_checkpoint)
+            total_bb_evals=checkpoint_data['total_bb_evals']
+            start_time = time.time()
+            seeds_list=None
 
-        for round_idx in range(1, self.num_rounds + 1):
+        # load_flag=True #only load data once when user set RESUME=TRUE
+        seeds_list=[]
+        for round_idx in range(round_start, self.num_rounds + 1):
+
             metrics = {}
             #TODO:set cpu to run
             # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+            load_flag=True
+            if our_settings.RESUME==True and load_flag==True:
+                self.active_candidates=active_candidates#all_seqs, all_targets,active_candidates
+                self.active_targets=all_targets
+                self.active_seqs=all_seqs
+                pareto_history_pool=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
+                pareto_target_history = pareto_history_pool['pareto_target_history']
+                pareto_seq_history =pareto_history_pool['pareto_seq_history']
+                pareto_cand_history = pareto_history_pool['pareto_cand_history']
+                pool_candidates=pareto_history_pool['pool_candidates']
+                pool_seqs=pareto_history_pool['pool_seqs']
+                pool_targets=pareto_history_pool['pool_targets']
+                rescaled_ref_point=pareto_history_pool['rescaled_ref_point']
+                new_targets=pareto_history_pool['new_targets']
+                new_seqs=pareto_history_pool['new_seqs']
+                pareto_candidates=pareto_history_pool['pareto_candidates']
+                pareto_targets=pareto_history_pool['pareto_targets']
+                hypercube_transform= pareto_history_pool['hypercube_transform']
+                seeds_list=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
+                np.random.seed(seeds_list[-1])
+                load_flag=False
+            else:
+                seed_value = np.random.randint(20)
+                np.random.seed(seed_value)
+                seeds_list.append(seed_value)
+                torch.save(seeds_list, os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
+
 
             # contract active pool to current Pareto frontier
             if (self.concentrate_pool > 0 and round_idx % self.concentrate_pool == 0) or self.latent_init == 'perturb_pareto':
@@ -194,7 +264,13 @@ class LaMBO(object):
             all_splits = update_splits(
                 self.train_split, self.val_split, self.test_split, new_split, holdout_ratio,
             )
+            #TODO: save splits
+            all_splits_checkpoint=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))
+            if our_settings.RESUME==True and all_splits_checkpoint['round_idx_flag']==round_idx:
+                all_splits=all_splits_checkpoint['all_splits']
             self.train_split, self.val_split, self.test_split = all_splits
+            all_splits_checkpoint={'all_splits':all_splits,'round_idx_flag':round_idx}
+            torch.save(all_splits_checkpoint, os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))#save current splits result
 
             X_train, Y_train = self.train_split.inputs, tgt_transform(self.train_split.targets)
             X_val, Y_val = self.val_split.inputs, tgt_transform(self.val_split.targets)
@@ -301,19 +377,21 @@ class LaMBO(object):
                     )
                     opt_params.copy_(opt_features)
 
+                step_start=0
                 # optimize decision variables
-                # TODO: load RESUME checkpoint
+                # TODO: load RESUME checkpoint, note that if the last step is training completely, it is not neccessary to load checkpoint
                 optimizer = torch.optim.Adam(params=[opt_params], lr=self.lr, betas=(0., 1e-2))
                 lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=self.patience)
-                if our_settings.RESUME==True:                    # encoder
-                    path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt')
+                if our_settings.RESUME==True:
+                    path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')
                     checkpoint_ec = torch.load(path_checkpoint_ec)
-                    optimizer.load_state_dict(checkpoint_ec['optimizer'])
-                    lr_sched.load_state_dict(checkpoint_ec['lr_sched'])
-                    self.encoder.load_state_dict(checkpoint_ec['encoder'])
+                    if checkpoint_ec['step_start']!=self.num_opt_steps-1:                    # encoder
+                        optimizer.load_state_dict(checkpoint_ec['optimizer'])
+                        lr_sched.load_state_dict(checkpoint_ec['lr_sched'])
+                        step_start=checkpoint_ec['step_start']
 
                 best_score, best_step = None, 0
-                for step_idx in range(self.num_opt_steps):
+                for step_idx in range(step_start,self.num_opt_steps):
                     if self.encoder_obj == 'lanmt':
                         lat_tok_features, pooled_features = self.encoder.pool_features(opt_params, src_mask)
                         tgt_tok_logits, tgt_mask = self.encoder.logits_from_features(
@@ -325,23 +403,19 @@ class LaMBO(object):
                     elif self.encoder_obj == 'mlm':
                         current_features = src_tok_features.clone()
                         np.put_along_axis(current_features, mask_idxs[..., None], opt_params, axis=1)
-                        try:
-                            lat_tok_features, pooled_features = self.encoder.pool_features(current_features, src_mask)
-                            tgt_tok_logits, tgt_mask = self.encoder.logits_from_features(
-                                current_features, src_mask, lat_tok_features, tgt_lens
-                            )
-                            new_tok_idxs, logit_entropy = sample_tokens(
-                                base_tok_idxs, tgt_tok_logits, self.encoder.tokenizer, replacement=False
-                            )
-                        except:
-                            print()
+                        lat_tok_features, pooled_features = self.encoder.pool_features(current_features, src_mask)
+                        tgt_tok_logits, tgt_mask = self.encoder.logits_from_features(
+                            current_features, src_mask, lat_tok_features, tgt_lens
+                        )
+                        new_tok_idxs, logit_entropy = sample_tokens(
+                            base_tok_idxs, tgt_tok_logits, self.encoder.tokenizer, replacement=False
+                        )
                         new_tok_idxs = np.take_along_axis(new_tok_idxs, mask_idxs, axis=1)
                         tgt_tok_idxs = src_tok_idxs.clone()
                         np.put_along_axis(tgt_tok_idxs, mask_idxs, new_tok_idxs, axis=1)
                         logit_entropy = np.take_along_axis(logit_entropy, mask_idxs, axis=1)
                     else:
                         raise ValueError
-
 
                     lat_acq_vals = acq_fn(pooled_features.unsqueeze(0))
                     loss = -lat_acq_vals.mean() + self.entropy_penalty * logit_entropy.mean()
@@ -355,7 +429,8 @@ class LaMBO(object):
                     checkpoint_encoder = {
                         "optimizer": optimizer.state_dict(),
                         "lr_sched": lr_sched.state_dict(),
-                        'encoder':self.encoder.state_dict()
+                        'opt_params':opt_params,
+                        'step_start':step_idx
                     }
                     torch.save(checkpoint_encoder,os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt'))
 
@@ -457,17 +532,13 @@ class LaMBO(object):
                     new_seqs = np.delete(new_seqs, np.where(new_seqs == seq))
                     new_candidates = np.delete(new_candidates, np.where(new_candidates == candidates))
                     continue
-
                 assert len(metrics) == len(
                     our_settings.scoring_metrics), 'scoring funtion have some problem, please contact qwy'
-
                 metrics_list = []
                 for metric_name in our_settings.scoring_metrics:
                     metrics_list.append(metrics[metric_name])
                 all_metrics_candidate.append(metrics_list)
                 new_targets.append(metrics_list)
-
-
             new_targets = np.array(new_targets)
 
             all_targets = np.concatenate((all_targets, new_targets))
@@ -513,6 +584,23 @@ class LaMBO(object):
             pareto_seq_history = safe_np_cat([pareto_seq_history, pareto_seqs[par_is_new]])
             pareto_target_history = safe_np_cat([pareto_target_history, pareto_targets[par_is_new]])
 
+            # TODO: save the history parameters
+            pareto_history_pool = {
+                'pareto_cand_history': pareto_cand_history,
+                'pareto_seq_history':pareto_seq_history,
+                'pareto_target_history':pareto_target_history,
+                'pool_candidates':pool_candidates,
+                'pool_targets':pool_targets,
+                'pool_seqs':pool_seqs,
+                'rescaled_ref_point':rescaled_ref_point,
+                'new_targets':new_targets,
+                'new_seqs':new_seqs,
+                'pareto_candidates':pareto_candidates,
+                'pareto_targets':pareto_targets,
+                'hypercube_transform':hypercube_transform,
+            }
+            torch.save(pareto_history_pool, os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
+
             # logging
             norm_pareto_targets = hypercube_transform(pareto_targets)
             total_bb_evals += batch_size
@@ -520,20 +608,21 @@ class LaMBO(object):
             metrics = self._log_optimizer_metrics(
                 norm_pareto_targets, round_idx, total_bb_evals, start_time, log_prefix
             )
-            # with open('log.txt', 'a')as f:
-            #     f.write('\n'.join(new_seqs) + '\n' + str(new_targets) + '\n')
 
             #save log file
             save_result(round_idx, new_seqs, all_metrics_candidate)
             #TODO: save pool candidate and base candidate
-            checkpoint = {
-                "all_seqs": pool_seqs,
-                "all_targets": pool_targets,
-                "base_candidate": base_candidate_save,
-                "base_target":base_target_save
+            checkpoint_data = {
+                'round_start':round_idx+1,
+                'active_candidates': self.active_candidates,
+                'active_targets': self.active_targets,
+                'active_seqs':self.active_seqs,
+                'base_candidate': base_candidate_save,
+                'base_target':base_target_save,
+                'total_bb_evals':total_bb_evals
             }
-            torch.save(checkpoint,os.path.join(project_path, 'data', 'experiments', 'test','temp_data.pt'))
-
+            torch.save(checkpoint_data,os.path.join(project_path, 'data', 'experiments', 'test','temp_data.pt'))
+            print()
         return metrics
 
     def sample_mutation_window(self, window_mask_idxs, window_entropy, temp=1.):
