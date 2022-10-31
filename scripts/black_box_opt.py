@@ -20,8 +20,22 @@ import our_settings
 
 @hydra.main(config_path='../hydra_config', config_name='black_box_opt')
 def main(config):
+    project_path = hydra.utils.get_original_cwd()
+    #judge seetings of init lambo
+    if our_settings.RESUME == True:
+        path_config = os.path.join(os.path.join(project_path, 'data', 'experiments', 'test', 'config.pt'))
+        assert os.path.exists(path_config), 'you have not run once at least, please set RESUME=False in oursettings.py'
+        config_RESUME = torch.load(path_config)
+        for i in config_RESUME.keys():
+            if i == 'logger' or i == 'timestamp':
+                continue
+            else:
+                assert config_RESUME[i] == config[i] ,'Please do not update configuration before you start breakpoint optimization!'
+
+    torch.save(config, os.path.join(project_path, 'data', 'experiments', 'test', 'config.pt'))
+
     # setup
-    random.seed(None)  # make sure random seed resets between multirun jobs for random job-name generation
+    # random.seed(None)  # make sure random seed resets between multirun jobs for random job-name generation
     log_config = flatten_config(OmegaConf.to_container(config, resolve=True), sep='/')
     log_config = {'/'.join(('config', key)): val for key, val in log_config.items()}
     wandb.init(project='lambo', config=log_config, mode=config.wandb_mode,
@@ -49,11 +63,13 @@ def main(config):
 
                 path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test','temp_data.pt'))
                 assert os.path.exists(path_checkpoint),'you have not run once, please set RESUME=False in oursettings.py'
-                checkpoint = torch.load(path_checkpoint)
+                checkpoint = torch.load(path_checkpoint)     #active_candidates active_targets   active_seqs
                 base_candidates=checkpoint['base_candidate']
                 base_targets=checkpoint['base_target']
-                all_seqs=checkpoint['all_seqs']  #pool
-                all_targets=checkpoint['all_targets']
+                active_candidates=checkpoint['active_candidates']  #pool
+                active_targets=checkpoint['active_targets']
+                active_seqs=checkpoint['active_seqs']
+                round_idx=checkpoint['round_start']
 
                 max_chol_sz = config.surrogate.get('max_cholesky_size', int(1e5))
                 with max_cholesky_size(max_chol_sz):
@@ -66,7 +82,7 @@ def main(config):
                         tokenizer=tokenizer
                     )
                     metrics = optimizer.optimize(
-                        base_candidates, base_targets, all_seqs, all_targets, log_prefix=config.task.log_prefix
+                        base_candidates, base_targets, active_seqs,active_targets,active_candidates,round_idx, log_prefix=config.task.log_prefix
                     )
             else:
                 base_candidates, base_targets, all_seqs, all_targets = bb_task.task_setup_SASA_energy(config,project_root=project_root)
@@ -82,7 +98,7 @@ def main(config):
                         tokenizer=tokenizer
                     )
                     metrics = optimizer.optimize(
-                        base_candidates, base_targets, all_seqs, all_targets, log_prefix=config.task.log_prefix
+                        base_candidates, base_targets, all_seqs, all_targets,None,1, log_prefix=config.task.log_prefix
                     )
 
             metrics = {key.split('/')[-1]: val for key, val in metrics.items()}  # strip prefix
