@@ -173,10 +173,13 @@ class LaMBO(object):
             #TODO:set cpu to run
             # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
             load_flag=True
-            if our_settings.RESUME==True and load_flag==True:
-                self.active_candidates=active_candidates#all_seqs, all_targets,active_candidates
-                self.active_targets=all_targets
-                self.active_seqs=all_seqs
+            if our_settings.RESUME==True and load_flag==True \
+                    and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt')) \
+                    and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt')):
+                if active_candidates != None:
+                    self.active_candidates=active_candidates#all_seqs, all_targets,active_candidates
+                    self.active_targets=all_targets
+                    self.active_seqs=all_seqs
                 pareto_history_pool=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
                 pareto_target_history = pareto_history_pool['pareto_target_history']
                 pareto_seq_history =pareto_history_pool['pareto_seq_history']
@@ -265,9 +268,10 @@ class LaMBO(object):
                 self.train_split, self.val_split, self.test_split, new_split, holdout_ratio,
             )
             #TODO: save splits
-            all_splits_checkpoint=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))
-            if our_settings.RESUME==True and all_splits_checkpoint['round_idx_flag']==round_idx:
-                all_splits=all_splits_checkpoint['all_splits']
+            if os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt')):
+                all_splits_checkpoint=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))
+                if our_settings.RESUME==True and all_splits_checkpoint['round_idx_flag']==round_idx:
+                    all_splits=all_splits_checkpoint['all_splits']
             self.train_split, self.val_split, self.test_split = all_splits
             all_splits_checkpoint={'all_splits':all_splits,'round_idx_flag':round_idx}
             torch.save(all_splits_checkpoint, os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))#save current splits result
@@ -382,7 +386,8 @@ class LaMBO(object):
                 # TODO: load RESUME checkpoint, note that if the last step is training completely, it is not neccessary to load checkpoint
                 optimizer = torch.optim.Adam(params=[opt_params], lr=self.lr, betas=(0., 1e-2))
                 lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=self.patience)
-                if our_settings.RESUME==True:
+                if our_settings.RESUME==True \
+                        and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')):
                     path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')
                     checkpoint_ec = torch.load(path_checkpoint_ec)
                     if checkpoint_ec['step_start']!=self.num_opt_steps-1:                    # encoder
