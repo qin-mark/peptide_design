@@ -158,7 +158,7 @@ def fit_gp_surrogate(
     surrogate.to(surrogate.device)
     print(f'starting val NLL: {best_score:.4f}')
 
-    if any([isinstance(module, _BatchNorm) for module in surrogate.encoder.modules()]):
+    if any([isinstance(module, _BatchNorm) for module in surrogate.encoder.modules()]):#have not run
         print('\n---- initializing encoder normalization buffers ----')
         num_warmup_epochs = 8
         surrogate.train()
@@ -166,7 +166,7 @@ def fit_gp_surrogate(
         for epoch in range(num_warmup_epochs):
             for inputs, _ in train_loader:
                 _ = surrogate.get_features(inputs.to(surrogate.device), surrogate.bs, transform=False)
-
+    # have not run
     if hasattr(surrogate, 'init_inducing_points') and surrogate.num_inducing_points <= X_train.shape[0]:
         print('\n---- initializing GP variational params ----')
         surrogate.eval()
@@ -197,19 +197,23 @@ def fit_gp_surrogate(
     gp_lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         gp_optimizer, patience=math.ceil(surrogate.patience / 2.), threshold=1e-3
     )
+    epoch_start=0
+
     #TODO: load surrogate function
     project_path=hydra.utils.get_original_cwd()
-    if our_settings.RESUME==True:
-        path_checkpoint_gp = os.path.join(project_path, 'data', 'experiments', 'test','surrogate.pt')
-        assert os.path.exists(path_checkpoint_gp),'do not have checkpoint, maybe you have not train at once least'
+    if our_settings.RESUME==True and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')):
+        path_checkpoint_gp = os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')
+        assert os.path.exists(path_checkpoint_gp), 'do not have checkpoint, maybe you have not train at once least'
         checkpoint_gp = torch.load(path_checkpoint_gp)
-        gp_optimizer.load_state_dict(checkpoint_gp['gp_optimizer'])
-        gp_lr_sched.load_state_dict(checkpoint_gp['gp_lr_sched'])
-        surrogate.load_state_dict(checkpoint_gp['surrogate'])
-
+        epoch_start_load = checkpoint_gp['epoch_start']
+        if epoch_start_load+1!=surrogate.num_epochs:
+            gp_optimizer.load_state_dict(checkpoint_gp['gp_optimizer'])
+            gp_lr_sched.load_state_dict(checkpoint_gp['gp_lr_sched'])
+            surrogate.load_state_dict(checkpoint_gp['surrogate'])
+            epoch_start=epoch_start_load
     records = [start_metrics]
     print('\n---- fitting all params ----')
-    for epoch_idx in range(surrogate.num_epochs):
+    for epoch_idx in range(epoch_start,surrogate.num_epochs):
         metrics = {}
 
         # train encoder through supervised MLL objective
@@ -247,6 +251,7 @@ def fit_gp_surrogate(
         gp_lr_sched.step(avg_train_loss)
 
         checkpoint_gp = {
+            'epoch_start':epoch_idx,
             "gp_optimizer": gp_optimizer.state_dict(),
             "gp_lr_sched": gp_lr_sched.state_dict(),
             "surrogate":surrogate.state_dict()                  # model
