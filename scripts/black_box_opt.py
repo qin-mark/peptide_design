@@ -24,13 +24,14 @@ def main(config):
     #judge seetings of init lambo
     if our_settings.RESUME == True:
         path_config = os.path.join(os.path.join(project_path, 'data', 'experiments', 'test', 'config.pt'))
-        assert os.path.exists(path_config), 'you have not run once at least, please set RESUME=False in oursettings.py'
-        config_RESUME = torch.load(path_config)
-        for i in config_RESUME.keys():
-            if i == 'logger' or i == 'timestamp':
-                continue
-            else:
-                assert config_RESUME[i] == config[i] ,'Please do not update configuration before you start breakpoint optimization!'
+        if os.path.exists(path_config):
+            assert os.path.exists(path_config), 'you have not run once at least, please set RESUME=False in oursettings.py'
+            config_RESUME = torch.load(path_config)
+            for i in config_RESUME.keys():
+                if i == 'logger' or i == 'timestamp':
+                    continue
+                else:
+                    assert config_RESUME[i] == config[i] ,'Please do not update configuration before you start breakpoint optimization!'
 
     torch.save(config, os.path.join(project_path, 'data', 'experiments', 'test', 'config.pt'))
 
@@ -57,11 +58,13 @@ def main(config):
             project_root = Path(os.getcwd()).parents[2]  # changing the Hydra run dir will break this.
             # base_candidates, base_targets, all_seqs, all_targets = bb_task.task_setup(config, project_root=project_root)
 
-            if our_settings.RESUME==True:                 # pool
+            path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test', 'temp_data.pt'))
+
+            if our_settings.RESUME==True and os.path.exists(path_checkpoint):                 # pool
                 #TODO:hold on training
                 #load base_candidates, base_targets, all_seqs, all_targets
 
-                path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test','temp_data.pt'))
+                # path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test','temp_data.pt'))
                 assert os.path.exists(path_checkpoint),'you have not run once, please set RESUME=False in oursettings.py'
                 checkpoint = torch.load(path_checkpoint)     #active_candidates active_targets   active_seqs
                 base_candidates=checkpoint['base_candidate']
