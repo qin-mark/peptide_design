@@ -60,6 +60,7 @@ def main(config):
 
             path_checkpoint = os.path.join(os.path.join(project_root, 'data', 'experiments', 'test', 'temp_data.pt'))
 
+            # config.surrogate.num_epochs = len(our_settings.scoring_metrics) * 128
             if our_settings.RESUME==True and os.path.exists(path_checkpoint):                 # pool
                 #TODO:hold on training
                 #load base_candidates, base_targets, all_seqs, all_targets
