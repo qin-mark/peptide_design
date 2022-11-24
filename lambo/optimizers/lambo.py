@@ -529,6 +529,8 @@ class LaMBO(object):
                 try:
                     for metric in our_settings.scoring_metrics:
                         metric = self.get_metrics.run_colab_sasa(seq, metric)
+                        metrics.update({'round': round_idx})
+                        metrics.update({'sequence': ''})
                         metrics.update(metric)
                 except:
                     print(seq+'run colabfold failed!')
@@ -538,12 +540,19 @@ class LaMBO(object):
                     new_candidates = np.delete(new_candidates, np.where(new_candidates == candidates))
                     continue
                 assert len(metrics) == len(
-                    our_settings.scoring_metrics), 'scoring funtion have some problem, please contact qwy'
+                    our_settings.scoring_metrics)+2, 'scoring funtion have some problem, please contact qwy'
+                metrics['sequence'] = seq
                 metrics_list = []
                 for metric_name in our_settings.scoring_metrics:
                     metrics_list.append(metrics[metric_name])
                 all_metrics_candidate.append(metrics_list)
                 new_targets.append(metrics_list)
+
+                df = pd.DataFrame([metrics])
+                if os.path.exists('log.csv') == 0:
+                    df.to_csv('log.csv', sep=',', mode='a', index=None, header=True)
+                else:
+                    df.to_csv('log.csv', sep=',', mode='a', index=None, header=None)
             new_targets = np.array(new_targets)
 
             all_targets = np.concatenate((all_targets, new_targets))
@@ -615,7 +624,7 @@ class LaMBO(object):
             )
 
             #save log file
-            save_result(round_idx, new_seqs, all_metrics_candidate)
+            # save_result(round_idx, new_seqs, all_metrics_candidate)
             #TODO: save pool candidate and base candidate
             checkpoint_data = {
                 'round_start':round_idx+1,
