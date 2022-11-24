@@ -73,6 +73,19 @@ def get_complex_pdb_name(path):
             return pdb_name
 
 
+def get_json_name(path):
+    name_list = os.listdir(path)
+    pdb_name = ''
+    for name in name_list:
+        # if name.startswith('test_9216f_unrelaxed_rank_1') and name[-4:] == '.pdb':
+        if 'unrelaxed_rank_1' in name and name[-5:] == '.json':
+            pdb_name = name
+    if pdb_name == '':
+        return ValueError
+    else:
+        return pdb_name
+
+
 def get_sasa_difference(result_path,peptide_chain,AKT_chain):
     # TODO replace the path
     path = result_path
@@ -92,6 +105,16 @@ def get_sasa_difference(result_path,peptide_chain,AKT_chain):
     return akt_sasa + independent_sasa - complex_sasa
 
 
+import json
+import numpy as np
+def get_confident_score(result_path):
+    json_name = get_json_name(result_path)
+    jfile = json.load(open(result_path + '/' + json_name, 'r'))
+    plddt_list = jfile['plddt']
+    score = np.mean(plddt_list)
+    return score
+
+
 import time
 def run_colabfold_5(cmd):
     state=1
@@ -108,7 +131,7 @@ def run_colabfold_5(cmd):
 
 
 
-
+from pathlib import Path
 import sys
 import hydra
 import our_settings
@@ -119,6 +142,7 @@ class Colabfold_SASA():
         self.akt_seq = our_settings.AKT
         # self.uuid=peptide_seq
         self.project_root = hydra.utils.get_original_cwd()
+        # self.project_root = Path(os.getcwd()).parents[3]
         self.path = os.path.join(self.project_root, 'colabfold_SASA')
         self.tokenizer=hydra.utils.instantiate({'_target_': 'lambo.utils.ResidueTokenizer'})
         self.work_dir=os.path.join(self.project_root,'data','experiments','test')
@@ -206,8 +230,10 @@ class Colabfold_SASA():
 
     def get_metrics(self,peptide_path, result_path, peptide_chain, AKT_chain, complex_path, metric):
         metrics = {}
-        if metric == 'SASA':
+        if metric == 'SASA'or metrics == 'confident':
             metrics[metric] = get_sasa_difference(result_path, peptide_chain, AKT_chain)
+            if metric == 'confident':
+                metrics[metric] = get_confident_score(result_path)
         elif metric == 'energy':
             if os.path.exists(self.work_dir):
                 metrics[metric] = FoldedCandidate(self.work_dir, peptide_path, [], self.tokenizer,
@@ -259,8 +285,8 @@ class Colabfold_SASA():
 
             # If don't have an environment that integrates colabfold and lambo, use a bash script to run colabfold
             # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-            # sh_path = os.path.join(self.path, 'run_complex_osc.sh')
-            # cmd = 'bash -i '+sh_path+' '+fa_path+' '+result_path
+            sh_path = os.path.join(self.path, 'run_complex_osc.sh')
+            cmd = 'bash -i '+sh_path+' '+fa_path+' '+result_path
 
             #If the colabfold can run in terminal, you can run them directly with the following command
             # try:
@@ -269,7 +295,7 @@ class Colabfold_SASA():
             #     print('colabfold_batch have not add to environment path!')
             #     sys.exit(0)
             # os.system('mkdir ' + result_path)
-            cmd='colabfold_batch --use-gpu-relax --num-recycle 3 --model-type AlphaFold2-multimer-v2 '+fa_path+' '+result_path
+            # cmd='colabfold_batch --use-gpu-relax --num-recycle 3 --model-type AlphaFold2-multimer-v2 '+fa_path+' '+result_path
 
             state=run_colabfold_5(cmd)
             complex_path = os.path.join(self.path, 'result', peptide_seq, get_complex_pdb_name(result_path))
