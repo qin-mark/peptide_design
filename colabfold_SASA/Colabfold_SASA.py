@@ -86,20 +86,22 @@ def get_json_name(path):
         return pdb_name
 
 
-def get_sasa_difference(result_path,peptide_chain,AKT_chain):
+def get_sasa_difference(peptide_path, akt_pdb_path,result_path,peptide_chain,AKT_chain):
     # TODO replace the path
     path = result_path
     complex_pdb_name = get_complex_pdb_name(result_path)
     # print(complex_pdb_name)
-    peptide_pdb_name = 'peptide.pdb'
-    akt_pdb_name = 'akt.pdb'
-    splitter = ChainSplitter(os.path.join(path , complex_pdb_name))
-    splitter.make_pdb(os.path.join(path , peptide_pdb_name), peptide_chain)
-    splitter.make_pdb(os.path.join(path, akt_pdb_name), AKT_chain)
+    # peptide_pdb_name = 'peptide.pdb'
+    # akt_pdb_name = 'akt.pdb'
+    # splitter = ChainSplitter(os.path.join(path , complex_pdb_name))
+    # splitter.make_pdb(os.path.join(path , peptide_pdb_name), peptide_chain)
+    # splitter.make_pdb(os.path.join(path, akt_pdb_name), AKT_chain)
     sasa_fn = SurfaceArea()
     complex_sasa = sasa_fn(uuid.uuid4().hex,  os.path.join(path , complex_pdb_name))
-    independent_sasa = sasa_fn(uuid.uuid4().hex, os.path.join(path , peptide_pdb_name))
-    akt_sasa = sasa_fn(uuid.uuid4().hex, os.path.join(path, akt_pdb_name))
+    independent_sasa = sasa_fn(uuid.uuid4().hex, peptide_path)
+    akt_sasa = sasa_fn(uuid.uuid4().hex, akt_pdb_path)
+    # independent_sasa = sasa_fn(uuid.uuid4().hex, os.path.join(path , peptide_pdb_name))
+    # akt_sasa = sasa_fn(uuid.uuid4().hex, os.path.join(path, akt_pdb_name))
     # akt_sasa = sasa_fn(uuid.uuid4().hex, path + akt_pdb_name)
     # print(akt_sasa, independent_sasa, complex_sasa)
     return akt_sasa + independent_sasa - complex_sasa
@@ -228,21 +230,21 @@ class Colabfold_SASA():
         return num_of_AKT_bind_sites_domain / (AKT_domain_end - AKT_domain_start + 1), num_of_AKT_bind_sites / len(
             chain_AKT), num_of_peptide_bind_sites / peptide_len
 
-    def get_metrics(self,peptide_path, result_path, peptide_chain, AKT_chain, complex_path, metric):
+    def get_metrics(self,peptide_path, akt_pdb_path, result_path, peptide_chain, AKT_chain, single_chain, complex_path, metric):
         metrics = {}
         if metric == 'SASA'or metrics == 'confident':
-            metrics[metric] = get_sasa_difference(result_path, peptide_chain, AKT_chain)
+            metrics[metric] = get_sasa_difference(peptide_path, akt_pdb_path,result_path, peptide_chain, AKT_chain)
             if metric == 'confident':
                 metrics[metric] = get_confident_score(result_path)
         elif metric == 'energy':
             if os.path.exists(self.work_dir):
                 metrics[metric] = FoldedCandidate(self.work_dir, peptide_path, [], self.tokenizer,
-                                              skip_minimization=True, chain=peptide_chain,
+                                              skip_minimization=True, chain=single_chain,
                                               wild_name='test').mutant_total_energy
             else:
                 os.system('mkdir '+self.work_dir)
                 metrics[metric] = FoldedCandidate(self.work_dir, peptide_path, [], self.tokenizer,
-                                                  skip_minimization=True, chain=peptide_chain,
+                                                  skip_minimization=True, chain=single_chain,
                                                   wild_name='test').mutant_total_energy
         elif metric == 'ratio_AKT_domain':
             metrics[metric] = self.binding_ratio(pdbfile=complex_path)[0]*our_settings.ratio_weight
@@ -254,6 +256,9 @@ class Colabfold_SASA():
 
     def run_colab_sasa(self,  peptide_seq,metric):
         complex_seq = '>'+peptide_seq+'\n'+our_settings.anchor_before+peptide_seq +our_settings.anchor_after+':'+ self.akt_seq
+        peptide_fa = '>' + peptide_seq + '\n' + our_settings.anchor_before + peptide_seq + our_settings.anchor_after
+        akt_fa = '>akt' + '\n' + self.akt_seq
+
         # if our_settings.anchor_after=='' and our_settings.anchor_before=='':
         #     peptide_chain = 'B'
         #     AKT_chain = 'C'
@@ -262,14 +267,22 @@ class Colabfold_SASA():
         #     AKT_chain = 'E'
         peptide_chain = 'B'
         AKT_chain = 'C'
+        single_chain = 'A'
 
         result_path=os.path.join(self.path,'result',peptide_seq)
+        peptide_result_path = os.path.join(self.path, 'pep_result', peptide_seq)
+        akt_result_path = os.path.join(self.path, 'akt/')
         fa_path=os.path.join(self.path, 'fasta',peptide_seq+ '.fa')
+        pep_fa_path = os.path.join(self.path, 'pep_fasta', peptide_seq + '.fa')
+        akt_fa_path = os.path.join(self.path, 'akt', 'akt.fa')
         # print(fa_path)
-        peptide_path=os.path.join(self.path, 'result',peptide_seq,'peptide.pdb')
-        if os.path.exists(fa_path) and os.path.exists(result_path) and os.path.exists(peptide_path):
+        # peptide_path=os.path.join(self.path, 'result',peptide_seq,'peptide.pdb')
+        peptide_pdb_path = os.path.join(self.path, 'pep_result', peptide_seq, 'peptide.pdb')
+        akt_pdb_path = os.path.join(self.path, 'akt', 'akt.pdb')
+        if os.path.exists(fa_path) and os.path.exists(result_path) and os.path.exists(peptide_pdb_path) \
+                and os.path.exists(akt_pdb_path):
             complex_path=os.path.join(self.path, 'result',peptide_seq ,get_complex_pdb_name(result_path))
-            metric=self.get_metrics(peptide_path,result_path,peptide_chain,AKT_chain,complex_path,metric)
+            metric=self.get_metrics(peptide_pdb_path,akt_pdb_path,result_path,peptide_chain,AKT_chain,single_chain,complex_path,metric)
             return metric
         else:
             # os.system('rm -rf ' + result_path)
@@ -282,11 +295,27 @@ class Colabfold_SASA():
 
             with open(fa_path, 'w') as f:
                 f.write(complex_seq)
+            with open(pep_fa_path, 'w') as f:
+                f.write(peptide_fa)
 
             # If don't have an environment that integrates colabfold and lambo, use a bash script to run colabfold
             # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
             sh_path = os.path.join(self.path, 'run_complex_osc.sh')
+            sh_single_path = os.path.join(self.path, 'run_single_osc.sh')
             cmd = 'bash -i '+sh_path+' '+fa_path+' '+result_path
+            peptide_cmd = 'bash -i ' + sh_single_path + ' ' + pep_fa_path + ' ' + peptide_result_path
+
+            if not os.path.exists(akt_pdb_path):
+                with open(akt_fa_path, 'w') as a:
+                    a.write(akt_fa)
+                akt_cmd = 'bash -i ' + sh_single_path + ' ' + akt_fa_path + ' ' + akt_result_path
+                state_akt = run_colabfold_5(akt_cmd)
+                if state_akt != 0:
+                    raise NameError('Colabfold have not run successfully!')
+                colab_akt_name = get_complex_pdb_name(akt_result_path)
+                with open(akt_pdb_path, 'w') as aw:
+                    with open(os.path.join(akt_result_path, colab_akt_name), 'r') as ar:
+                        aw.writelines(ar.readlines())
 
             #If the colabfold can run in terminal, you can run them directly with the following command
             # try:
@@ -298,9 +327,16 @@ class Colabfold_SASA():
             # cmd='colabfold_batch --use-gpu-relax --num-recycle 3 --model-type AlphaFold2-multimer-v2 '+fa_path+' '+result_path
 
             state=run_colabfold_5(cmd)
+            state_pep = run_colabfold_5(peptide_cmd)
+            colab_pep_name = get_complex_pdb_name(peptide_result_path)
+            # colab_akt_name = get_complex_pdb_name(akt_result_path)
+            with open(peptide_pdb_path, 'w') as pw:
+                with open(os.path.join(peptide_result_path, colab_pep_name), 'r') as pr:
+                    pw.writelines(pr.readlines())
+
             complex_path = os.path.join(self.path, 'result', peptide_seq, get_complex_pdb_name(result_path))
-            if state == 0:
-                return self.get_metrics(peptide_path,result_path,peptide_chain,AKT_chain,complex_path,metric)
+            if state == 0 and state_pep == 0:
+                return self.get_metrics(peptide_pdb_path,akt_pdb_path,result_path,peptide_chain,AKT_chain,single_chain,complex_path,metric)
             else:
                 raise NameError('Colabfold have not run successfully!')
 
