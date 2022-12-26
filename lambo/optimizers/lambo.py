@@ -62,6 +62,7 @@ class LaMBO(object):
                  encoder_obj, optimize_latent, position_sampler, entropy_penalty,
                  window_size, latent_init, **kwargs):
 
+        self.setting_conf = kwargs['setting_conf']
         self.tokenizer = tokenizer
         self.num_rounds = num_rounds
         self.num_gens = num_gens
@@ -102,68 +103,68 @@ class LaMBO(object):
     def optimize(self, candidate_pool, pool_targets, all_seqs, all_targets,active_candidates,round_start, log_prefix=''):
         project_path = hydra.utils.get_original_cwd()
         batch_size = self.bb_task.batch_size
-        if round_start==1:
-            base_candidate_save = candidate_pool
-            base_target_save = pool_targets
-            target_min = all_targets.min(axis=0).copy()
-            target_range = all_targets.max(axis=0).copy() - target_min
-            hypercube_transform = Normalizer(
-                loc=target_min + 0.5 * target_range,
-                scale=target_range / 2.,
-            )
-            new_seqs = all_seqs.copy()
-            new_targets = all_targets.copy()
+        # if round_start==1:
+        base_candidate_save = candidate_pool
+        base_target_save = pool_targets
+        target_min = all_targets.min(axis=0).copy()
+        target_range = all_targets.max(axis=0).copy() - target_min
+        hypercube_transform = Normalizer(
+            loc=target_min + 0.5 * target_range,
+            scale=target_range / 2.,
+        )
+        new_seqs = all_seqs.copy()
+        new_targets = all_targets.copy()
 
-            is_feasible = self.bb_task.is_feasible(candidate_pool)
-            pool_candidates = candidate_pool[is_feasible]
-            pool_targets = pool_targets[is_feasible]
-            pool_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pool_candidates])
+        is_feasible = self.bb_task.is_feasible(candidate_pool)
+        pool_candidates = candidate_pool[is_feasible]
+        pool_targets = pool_targets[is_feasible]
+        pool_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pool_candidates])
 
-            #check round index
-            self.active_candidates, self.active_targets = pool_candidates, pool_targets
-            self.active_seqs = pool_seqs
-            # elif round_start>=1 and our_settings.RESUME==True:
-            #     self.active_candidates, self.active_targets=active_candidates,all_targets,
-            #     self.active_seqs=all_seqs
-            # else:
-            #     raise NameError('maybe RESUME have some error,please check your round_idx')
+        #check round index
+        self.active_candidates, self.active_targets = pool_candidates, pool_targets
+        self.active_seqs = pool_seqs
+        # elif round_start>=1 and our_settings.RESUME==True:
+        #     self.active_candidates, self.active_targets=active_candidates,all_targets,
+        #     self.active_seqs=all_seqs
+        # else:
+        #     raise NameError('maybe RESUME have some error,please check your round_idx')
 
-            pareto_candidates, pareto_targets = pareto_frontier(self.active_candidates, self.active_targets)
-            pareto_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pareto_candidates])
-            pareto_cand_history = pareto_candidates.copy()
-            pareto_seq_history = pareto_seqs.copy()
-            pareto_target_history = pareto_targets.copy()
-            norm_pareto_targets = hypercube_transform(pareto_targets)
-            self._ref_point = -infer_reference_point(-torch.tensor(norm_pareto_targets)).numpy()
-            print(self._ref_point)
-            rescaled_ref_point = hypercube_transform.inv_transform(self._ref_point.copy())
+        pareto_candidates, pareto_targets = pareto_frontier(self.active_candidates, self.active_targets)
+        pareto_seqs = np.array([p_cand.mutant_residue_seq for p_cand in pareto_candidates])
+        pareto_cand_history = pareto_candidates.copy()
+        pareto_seq_history = pareto_seqs.copy()
+        pareto_target_history = pareto_targets.copy()
+        norm_pareto_targets = hypercube_transform(pareto_targets)
+        self._ref_point = -infer_reference_point(-torch.tensor(norm_pareto_targets)).numpy()
+        print(self._ref_point)
+        rescaled_ref_point = hypercube_transform.inv_transform(self._ref_point.copy())
 
-            # logging setup
-            total_bb_evals = 0
-            start_time = time.time()
-            round_idx = 0
-            self._log_candidates(pareto_candidates, pareto_targets, round_idx, log_prefix)
-            metrics = self._log_optimizer_metrics(norm_pareto_targets, round_idx, total_bb_evals, start_time, log_prefix)
+        # logging setup
+        total_bb_evals = 0
+        start_time = time.time()
+        round_idx = 0
+        self._log_candidates(pareto_candidates, pareto_targets, round_idx, log_prefix)
+        metrics = self._log_optimizer_metrics(norm_pareto_targets, round_idx, total_bb_evals, start_time, log_prefix)
 
-            print('\n best candidates')
-            obj_vals = {f'obj_val_{i}': pareto_targets[:, i].min() for i in range(self.bb_task.obj_dim)}
-            print(pd.DataFrame([obj_vals]).to_markdown(floatfmt='.4f'))
-        else:
-            base_candidate_save = candidate_pool
-            base_target_save = pool_targets
-            pareto_target_history=None
-            pareto_seq_history=None
-            pareto_cand_history=None
-            rescaled_ref_point=None
-            pareto_candidates = None
-            pareto_targets = None
-            hypercube_transform=None
-            obj_vals=None
-            path_checkpoint = os.path.join(os.path.join(project_path, 'data', 'experiments', 'test', 'temp_data.pt'))
-            checkpoint_data = torch.load(path_checkpoint)
-            total_bb_evals=checkpoint_data['total_bb_evals']
-            start_time = time.time()
-            seeds_list=None
+        print('\n best candidates')
+        obj_vals = {f'obj_val_{i}': pareto_targets[:, i].min() for i in range(self.bb_task.obj_dim)}
+        print(pd.DataFrame([obj_vals]).to_markdown(floatfmt='.4f'))
+        # else:
+        #     base_candidate_save = candidate_pool
+        #     base_target_save = pool_targets
+        #     pareto_target_history=None
+        #     pareto_seq_history=None
+        #     pareto_cand_history=None
+        #     rescaled_ref_point=None
+        #     pareto_candidates = None
+        #     pareto_targets = None
+        #     hypercube_transform=None
+        #     obj_vals=None
+        #     # path_checkpoint = os.path.join(os.path.join(project_path, 'data', 'experiments', 'test', 'temp_data.pt'))
+        #     checkpoint_data = torch.load(path_checkpoint)
+        #     total_bb_evals=checkpoint_data['total_bb_evals']
+        #     start_time = time.time()
+        #     seeds_list=None
 
         # load_flag=True #only load data once when user set RESUME=TRUE
         seeds_list=[]
@@ -172,35 +173,35 @@ class LaMBO(object):
             metrics = {}
             #TODO:set cpu to run
             # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-            load_flag=True
-            if our_settings.RESUME==True and load_flag==True \
-                    and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt')) \
-                    and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt')):
-                if active_candidates != None:
-                    self.active_candidates=active_candidates#all_seqs, all_targets,active_candidates
-                    self.active_targets=all_targets
-                    self.active_seqs=all_seqs
-                pareto_history_pool=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
-                pareto_target_history = pareto_history_pool['pareto_target_history']
-                pareto_seq_history =pareto_history_pool['pareto_seq_history']
-                pareto_cand_history = pareto_history_pool['pareto_cand_history']
-                pool_candidates=pareto_history_pool['pool_candidates']
-                pool_seqs=pareto_history_pool['pool_seqs']
-                pool_targets=pareto_history_pool['pool_targets']
-                rescaled_ref_point=pareto_history_pool['rescaled_ref_point']
-                new_targets=pareto_history_pool['new_targets']
-                new_seqs=pareto_history_pool['new_seqs']
-                pareto_candidates=pareto_history_pool['pareto_candidates']
-                pareto_targets=pareto_history_pool['pareto_targets']
-                hypercube_transform= pareto_history_pool['hypercube_transform']
-                seeds_list=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
-                np.random.seed(seeds_list[-1])
-                load_flag=False
-            else:
-                seed_value = np.random.randint(20)
-                np.random.seed(seed_value)
-                seeds_list.append(seed_value)
-                torch.save(seeds_list, os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
+            # load_flag=True
+            # if our_settings.RESUME==True and load_flag==True \
+            #         and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt')) \
+            #         and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt')):
+            #     if active_candidates != None:
+            #         self.active_candidates=active_candidates#all_seqs, all_targets,active_candidates
+            #         self.active_targets=all_targets
+            #         self.active_seqs=all_seqs
+            #     pareto_history_pool=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
+            #     pareto_target_history = pareto_history_pool['pareto_target_history']
+            #     pareto_seq_history =pareto_history_pool['pareto_seq_history']
+            #     pareto_cand_history = pareto_history_pool['pareto_cand_history']
+            #     pool_candidates=pareto_history_pool['pool_candidates']
+            #     pool_seqs=pareto_history_pool['pool_seqs']
+            #     pool_targets=pareto_history_pool['pool_targets']
+            #     rescaled_ref_point=pareto_history_pool['rescaled_ref_point']
+            #     new_targets=pareto_history_pool['new_targets']
+            #     new_seqs=pareto_history_pool['new_seqs']
+            #     pareto_candidates=pareto_history_pool['pareto_candidates']
+            #     pareto_targets=pareto_history_pool['pareto_targets']
+            #     hypercube_transform= pareto_history_pool['hypercube_transform']
+            #     seeds_list=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
+            #     np.random.seed(seeds_list[-1])
+            #     load_flag=False
+            # else:
+            #     seed_value = np.random.randint(20)
+            #     np.random.seed(seed_value)
+            #     seeds_list.append(seed_value)
+            #     torch.save(seeds_list, os.path.join(project_path, 'data', 'experiments', 'test', 'seeds_list.pt'))
 
 
             # contract active pool to current Pareto frontier
@@ -268,13 +269,13 @@ class LaMBO(object):
                 self.train_split, self.val_split, self.test_split, new_split, holdout_ratio,
             )
             #TODO: save splits
-            if os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt')):
-                all_splits_checkpoint=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))
-                if our_settings.RESUME==True and all_splits_checkpoint['round_idx_flag']==round_idx:
-                    all_splits=all_splits_checkpoint['all_splits']
+            # if os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt')):
+            #     all_splits_checkpoint=torch.load(os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))
+            #     if our_settings.RESUME==True and all_splits_checkpoint['round_idx_flag']==round_idx:
+            #         all_splits=all_splits_checkpoint['all_splits']
             self.train_split, self.val_split, self.test_split = all_splits
-            all_splits_checkpoint={'all_splits':all_splits,'round_idx_flag':round_idx}
-            torch.save(all_splits_checkpoint, os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))#save current splits result
+            # all_splits_checkpoint={'all_splits':all_splits,'round_idx_flag':round_idx}
+            # torch.save(all_splits_checkpoint, os.path.join(project_path, 'data', 'experiments', 'test', 'all_splits.pt'))#save current splits result
 
             X_train, Y_train = self.train_split.inputs, tgt_transform(self.train_split.targets)
             X_val, Y_val = self.val_split.inputs, tgt_transform(self.val_split.targets)
@@ -386,14 +387,14 @@ class LaMBO(object):
                 # TODO: load RESUME checkpoint, note that if the last step is training completely, it is not neccessary to load checkpoint
                 optimizer = torch.optim.Adam(params=[opt_params], lr=self.lr, betas=(0., 1e-2))
                 lr_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=self.patience)
-                if our_settings.RESUME==True \
-                        and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')):
-                    path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')
-                    checkpoint_ec = torch.load(path_checkpoint_ec)
-                    if checkpoint_ec['step_start']!=self.num_opt_steps-1:                    # encoder
-                        optimizer.load_state_dict(checkpoint_ec['optimizer'])
-                        lr_sched.load_state_dict(checkpoint_ec['lr_sched'])
-                        step_start=checkpoint_ec['step_start']
+                # if our_settings.RESUME==True \
+                #         and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')):
+                #     path_checkpoint_ec = os.path.join(project_path, 'data', 'experiments', 'test', 'encoder.pt')
+                #     checkpoint_ec = torch.load(path_checkpoint_ec)
+                #     if checkpoint_ec['step_start']!=self.num_opt_steps-1:                    # encoder
+                #         optimizer.load_state_dict(checkpoint_ec['optimizer'])
+                #         lr_sched.load_state_dict(checkpoint_ec['lr_sched'])
+                #         step_start=checkpoint_ec['step_start']
 
                 best_score, best_step = None, 0
                 for step_idx in range(step_start,self.num_opt_steps):
@@ -431,13 +432,13 @@ class LaMBO(object):
                         lr_sched.step(loss)
 
                     #TODO: save encoder model parameters
-                    checkpoint_encoder = {
-                        "optimizer": optimizer.state_dict(),
-                        "lr_sched": lr_sched.state_dict(),
-                        'opt_params':opt_params,
-                        'step_start':step_idx
-                    }
-                    torch.save(checkpoint_encoder,os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt'))
+                    # checkpoint_encoder = {
+                    #     "optimizer": optimizer.state_dict(),
+                    #     "lr_sched": lr_sched.state_dict(),
+                    #     'opt_params':opt_params,
+                    #     'step_start':step_idx
+                    # }
+                    # torch.save(checkpoint_encoder,os.path.join(project_path, 'data', 'experiments', 'test','encoder.pt'))
 
                     tgt_seqs = tokens_to_str(tgt_tok_idxs, self.encoder.tokenizer)
                     act_acq_vals = acq_fn(tgt_seqs[None, :]).mean().item()
@@ -527,7 +528,8 @@ class LaMBO(object):
             for seq, candidates in zip(new_seqs_temp, new_candidates_temp):
                 metrics = {}
                 try:
-                    for metric in our_settings.scoring_metrics:
+                    # for metric in our_settings.scoring_metrics:
+                    for metric in ['SASA', 'energy', 'ratio_AKT', 'ratio_AKT_domain', 'ratio_peptide', 'confident']:
                         metric = self.get_metrics.run_colab_sasa(seq, metric)
                         metrics.update({'round': round_idx})
                         metrics.update({'sequence': ''})
@@ -539,20 +541,24 @@ class LaMBO(object):
                     new_seqs = np.delete(new_seqs, np.where(new_seqs == seq))
                     new_candidates = np.delete(new_candidates, np.where(new_candidates == candidates))
                     continue
-                assert len(metrics) == len(
-                    our_settings.scoring_metrics)+2, 'scoring funtion have some problem, please contact qwy'
+                # assert len(metrics) == len(
+                #     our_settings.scoring_metrics)+2, 'scoring funtion have some problem, please contact qwy'
                 metrics['sequence'] = seq
                 metrics_list = []
                 for metric_name in our_settings.scoring_metrics:
+                # for metric_name in ['SASA', 'energy', 'ratio_AKT', 'ratio_AKT_domain', 'ratio_peptide', 'confident']:
                     metrics_list.append(metrics[metric_name])
                 all_metrics_candidate.append(metrics_list)
                 new_targets.append(metrics_list)
 
                 df = pd.DataFrame([metrics])
-                if os.path.exists('log.csv') == 0:
-                    df.to_csv('log.csv', sep=',', mode='a', index=None, header=True)
+                project_path = hydra.utils.get_original_cwd()
+                if os.path.exists('../' + self.setting_conf['time_stamp'] + 'log.csv') == False:
+                    df.to_csv(os.path.join(project_path, 'data', 'experiments', self.setting_conf['time_stamp'],
+                                           'log.csv'), sep=',', mode='a', index=None, header=True)
                 else:
-                    df.to_csv('log.csv', sep=',', mode='a', index=None, header=None)
+                    df.to_csv(os.path.join(project_path, 'data', 'experiments', self.setting_conf['time_stamp'],
+                                           'log.csv'), sep=',', mode='a', index=None, header=None)
             new_targets = np.array(new_targets)
 
             all_targets = np.concatenate((all_targets, new_targets))
@@ -613,7 +619,7 @@ class LaMBO(object):
                 'pareto_targets':pareto_targets,
                 'hypercube_transform':hypercube_transform,
             }
-            torch.save(pareto_history_pool, os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
+            # torch.save(pareto_history_pool, os.path.join(project_path, 'data', 'experiments', 'test', 'pareto_history_pool.pt'))
 
             # logging
             norm_pareto_targets = hypercube_transform(pareto_targets)
@@ -635,7 +641,7 @@ class LaMBO(object):
                 'base_target':base_target_save,
                 'total_bb_evals':total_bb_evals
             }
-            torch.save(checkpoint_data,os.path.join(project_path, 'data', 'experiments', 'test','temp_data.pt'))
+            # torch.save(checkpoint_data,os.path.join(project_path, 'data', 'experiments', 'test','temp_data.pt'))
             print()
         return metrics
 
