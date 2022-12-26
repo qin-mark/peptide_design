@@ -201,16 +201,16 @@ def fit_gp_surrogate(
 
     #TODO: load surrogate function
     project_path=hydra.utils.get_original_cwd()
-    if our_settings.RESUME==True and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')):
-        path_checkpoint_gp = os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')
-        assert os.path.exists(path_checkpoint_gp), 'do not have checkpoint, maybe you have not train at once least'
-        checkpoint_gp = torch.load(path_checkpoint_gp)
-        epoch_start_load = checkpoint_gp['epoch_start']
-        if epoch_start_load+1!=surrogate.num_epochs:
-            gp_optimizer.load_state_dict(checkpoint_gp['gp_optimizer'])
-            gp_lr_sched.load_state_dict(checkpoint_gp['gp_lr_sched'])
-            surrogate.load_state_dict(checkpoint_gp['surrogate'])
-            epoch_start=epoch_start_load
+    # if our_settings.RESUME==True and os.path.exists(os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')):
+    #     path_checkpoint_gp = os.path.join(project_path, 'data', 'experiments', 'test', 'surrogate.pt')
+    #     assert os.path.exists(path_checkpoint_gp), 'do not have checkpoint, maybe you have not train at once least'
+    #     checkpoint_gp = torch.load(path_checkpoint_gp)
+    #     epoch_start_load = checkpoint_gp['epoch_start']
+    #     if epoch_start_load+1!=surrogate.num_epochs:
+    #         gp_optimizer.load_state_dict(checkpoint_gp['gp_optimizer'])
+    #         gp_lr_sched.load_state_dict(checkpoint_gp['gp_lr_sched'])
+    #         surrogate.load_state_dict(checkpoint_gp['surrogate'])
+    #         epoch_start=epoch_start_load
     records = [start_metrics]
     print('\n---- fitting all params ----')
     for epoch_idx in range(epoch_start,surrogate.num_epochs):
@@ -250,13 +250,13 @@ def fit_gp_surrogate(
 
         gp_lr_sched.step(avg_train_loss)
 
-        checkpoint_gp = {
-            'epoch_start':epoch_idx,
-            "gp_optimizer": gp_optimizer.state_dict(),
-            "gp_lr_sched": gp_lr_sched.state_dict(),
-            "surrogate":surrogate.state_dict()                  # model
-        }
-        torch.save(checkpoint_gp,os.path.join(project_path, 'data', 'experiments', 'test','surrogate.pt'))
+        # checkpoint_gp = {
+        #     'epoch_start':epoch_idx,
+        #     "gp_optimizer": gp_optimizer.state_dict(),
+        #     "gp_lr_sched": gp_lr_sched.state_dict(),
+        #     "surrogate":surrogate.state_dict()                  # model
+        # }
+        # torch.save(checkpoint_gp,os.path.join(project_path, 'data', 'experiments', 'test','surrogate.pt'))
 
         metrics.update({
             "epoch": epoch_idx + 1,
