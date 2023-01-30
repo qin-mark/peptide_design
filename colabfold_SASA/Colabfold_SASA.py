@@ -275,8 +275,10 @@ class Colabfold_SASA():
         fa_path=os.path.join(self.path, 'fasta',peptide_seq+ '.fa')
         pep_fa_path = os.path.join(self.path, 'pep_fasta', peptide_seq + '.fa')
         akt_fa_path = os.path.join(self.path, 'akt', 'akt.fa')
+
         # print(fa_path)
         # peptide_path=os.path.join(self.path, 'result',peptide_seq,'peptide.pdb')
+        result_pdb_path = os.path.join(self.path, 'result', peptide_seq, 'peptide.pdb')
         peptide_pdb_path = os.path.join(self.path, 'pep_result', peptide_seq, 'peptide.pdb')
         akt_pdb_path = os.path.join(self.path, 'akt', 'akt.pdb')
         if os.path.exists(fa_path) and os.path.exists(result_path) and os.path.exists(peptide_pdb_path) \
@@ -292,6 +294,11 @@ class Colabfold_SASA():
             # os.system('echo "123456" | sudo -S rm -rf '+result_path)
             # os.system('echo "123456" | sudo -S touch ' + fa_path)
             print(complex_seq)
+            if not os.path.exists(os.path.join(self.path, 'pep_fasta')): os.makedirs(os.path.join(self.path, 'pep_fasta'))
+            if not os.path.exists(os.path.join(self.path, 'pep_result')):os.makedirs(os.path.join(self.path, 'pep_result'))
+            if not os.path.exists(os.path.join(self.path, 'akt')): os.makedirs(os.path.join(self.path, 'akt'))
+            if not os.path.exists(os.path.join(self.path, 'fasta')): os.makedirs(os.path.join(self.path, 'fasta'))
+            if not os.path.exists(os.path.join(self.path, 'result')): os.makedirs(os.path.join(self.path, 'result'))
 
             with open(fa_path, 'w') as f:
                 f.write(complex_seq)
@@ -329,9 +336,13 @@ class Colabfold_SASA():
             state=run_colabfold_5(cmd)
             state_pep = run_colabfold_5(peptide_cmd)
             colab_pep_name = get_complex_pdb_name(peptide_result_path)
+            colab_complex_name = get_complex_pdb_name(result_path)
             # colab_akt_name = get_complex_pdb_name(akt_result_path)
             with open(peptide_pdb_path, 'w') as pw:
                 with open(os.path.join(peptide_result_path, colab_pep_name), 'r') as pr:
+                    pw.writelines(pr.readlines())
+            with open(result_pdb_path, 'w') as pw:
+                with open(os.path.join(result_path, colab_complex_name), 'r') as pr:
                     pw.writelines(pr.readlines())
 
             complex_path = os.path.join(self.path, 'result', peptide_seq, get_complex_pdb_name(result_path))
