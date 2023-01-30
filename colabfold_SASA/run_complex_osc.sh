@@ -1,5 +1,5 @@
 #!/bin/bash
-#conda activate colabfold
+conda activate my_colabfold
 fasta=$1
 result=$2
 mkdir $result
